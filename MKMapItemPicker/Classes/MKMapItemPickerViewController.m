@@ -8,10 +8,11 @@
 #import "MKMapItemPickerViewController.h"
 #import "MKMapItemListViewController.h"
 
-@interface MKMapItemPickerViewController () <UISearchBarDelegate, MKMapViewDelegate, CLLocationManagerDelegate, MKMapItemListViewControllerDelegate>
+@interface MKMapItemPickerViewController () <UISearchBarDelegate, MKMapViewDelegate, MKLocalSearchCompleterDelegate, CLLocationManagerDelegate, MKMapItemListViewControllerDelegate>
 {
     CLLocationManager* locationManager;
     MKLocalSearch* localSearch;
+    MKLocalSearchCompleter* localSearchCompleter;
     MKMapView* _mapView;
     UIPanGestureRecognizer*  panGesture;
     NSLayoutConstraint* tableTopConstraint;
@@ -19,6 +20,7 @@
     UIView* dimmingView;
     UIVisualEffectView* contentView;
     MKMapItemListViewController* itemList;
+    NSMutableArray<MKMapItem*>* mapItems;
 }
 @end
 
@@ -47,6 +49,7 @@
 
 - (void)setup {
     locationManager = [[CLLocationManager alloc] init];
+    localSearchCompleter = [[MKLocalSearchCompleter alloc] init];
     _mapView = [[MKMapView alloc] init];
     panGesture = [[UIPanGestureRecognizer alloc] init];
     tableTopConstraint = [[NSLayoutConstraint alloc] init];
@@ -54,10 +57,14 @@
     dimmingView = [[UIView alloc] init];
     contentView = [[UIVisualEffectView alloc] initWithEffect: [UIBlurEffect effectWithStyle: UIBlurEffectStyleLight]];
     itemList = [[MKMapItemListViewController alloc] initWithStyle: UITableViewStyleGrouped];
+    mapItems = [NSMutableArray array];
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+
+    // Search
+    localSearchCompleter.delegate = self;
 
     // Location
     [locationManager requestWhenInUseAuthorization];
@@ -159,16 +166,15 @@
     itemList.headerMessage = nil;
 }
 
-- (void)searchFor:(NSString*)queryString {
-    MKLocalSearchRequest* searchRequest = [[MKLocalSearchRequest alloc] init];
-    searchRequest.naturalLanguageQuery = queryString;
+- (void)search:(MKLocalSearchCompletion*)completion {
+    MKLocalSearchRequest* searchRequest = [[MKLocalSearchRequest alloc] initWithCompletion:completion];
     searchRequest.region = _mapView.region;
     MKLocalSearch* search = [[MKLocalSearch alloc] initWithRequest: searchRequest];
     [search startWithCompletionHandler:^(MKLocalSearchResponse * _Nullable response, NSError * _Nullable error) {
-        NSArray<MKMapItem*>* items = [NSArray array];
-        if (error == nil && response != nil)
-            items = response.mapItems;
-        [self reloadWith: items];
+        if (error == nil && response != nil) {
+            [mapItems addObjectsFromArray: response.mapItems];
+            [self reloadWith: mapItems];
+        }
     }];
     localSearch = search;
 }
@@ -183,20 +189,6 @@
     }
     
     return NO;
-}
-
-#pragma marg - Search bar text change
-
-- (void)searchTextChangedAction:(NSString*)text {
-    if (text.length == 0) {
-        localSearch = nil;
-        [self reloadWith: [NSArray array]];
-    }
-    else {
-        [self searchFor: text];
-        [self reloadWith: [NSArray array]];
-        itemList.headerMessage = [NSLocalizedString(@"Loading", comment: @"Loading") stringByAppendingString: @"..."];
-    }
 }
 
 #pragma marg - Pan gesture
@@ -240,9 +232,8 @@
 }
 
 - (BOOL)searchBar:(UISearchBar *)searchBar shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text {
-    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(searchTextChangedAction:) object:searchBar.text];
-    NSString* newText = [[searchBar.text stringByReplacingCharactersInRange:range withString:text] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    [self performSelector:@selector(searchTextChangedAction:) withObject:newText afterDelay:0.5];
+    localSearchCompleter.queryFragment = searchBar.text;
+    itemList.headerMessage = [NSLocalizedString(@"Loading", comment: @"Loading") stringByAppendingString: @"..."];
     return YES;
 }
 
@@ -273,9 +264,28 @@
 
 - (void)mapView:(MKMapView *)mapView regionDidChangeAnimated:(BOOL)animated {
     if ([self regionDidChangeFromUserInteraction: mapView]) {
+        localSearchCompleter.region = mapView.region;
         _mapView.delegate = nil;
         [UIView animateWithDuration:0.2 animations:^{}];
     }
+}
+
+#pragma mark - Local search completer delegate
+
+- (void)completerDidUpdateResults:(MKLocalSearchCompleter *)completer {
+    if (localSearchCompleter.results.count == 0) {
+        [itemList reloadWith: [NSArray array]];
+        return;
+    }
+
+    [mapItems removeAllObjects];
+    [itemList reloadWith:mapItems];
+    for (MKLocalSearchCompletion* completion in localSearchCompleter.results)
+        [self search: completion];
+}
+
+- (void)completer:(MKLocalSearchCompleter *)completer didFailWithError:(NSError *)error {
+    //
 }
 
 #pragma mark - Location manager delegate
@@ -301,6 +311,9 @@
 #pragma mark - Item list view controller delegate
 
 - (void)controller:(MKMapItemListViewController*)controller didSelect:(MKMapItem*)item {
+    [self setEditing:NO animated:YES];
+    _mapView.camera.altitude = 1000;
+    _mapView.camera.centerCoordinate = item.placemark.coordinate;
     if (self.delegate)
         [self.delegate controller:self didSelect:item];
 }
