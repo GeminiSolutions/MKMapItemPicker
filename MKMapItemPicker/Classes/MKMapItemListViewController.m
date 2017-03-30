@@ -32,6 +32,8 @@
     
     [self.tableView registerClass: MKMapItemListViewCell.class forCellReuseIdentifier: MKMapItemListViewCell.reuseIdentifier];
     self.tableView.rowHeight = 60;
+    self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    self.tableView.translatesAutoresizingMaskIntoConstraints = NO;
     headerLabel.textColor = UIColor.darkGrayColor;
     headerLabel.font = [UIFont boldSystemFontOfSize:10];
     headerLabel.textAlignment = NSTextAlignmentCenter;
@@ -39,6 +41,7 @@
 
 - (void)reloadWith:(NSArray<MKMapItem*>*)items {
     mapItems = items;
+    self.tableView.separatorStyle = (items.count > 0 ? UITableViewCellSeparatorStyleSingleLine : UITableViewCellSeparatorStyleNone);
     [self.tableView reloadData];
 }
 

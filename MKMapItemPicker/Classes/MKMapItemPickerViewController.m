@@ -14,6 +14,7 @@
     MKLocalSearch* localSearch;
     MKLocalSearchCompleter* localSearchCompleter;
     MKMapView* _mapView;
+    MKUserTrackingBarButtonItem* userTrackingButton;
     UIPanGestureRecognizer*  panGesture;
     NSLayoutConstraint* tableTopConstraint;
     UISearchBar* _searchBar;
@@ -51,12 +52,13 @@
     locationManager = [[CLLocationManager alloc] init];
     localSearchCompleter = [[MKLocalSearchCompleter alloc] init];
     _mapView = [[MKMapView alloc] init];
+    userTrackingButton = [[MKUserTrackingBarButtonItem alloc] initWithMapView:_mapView];
     panGesture = [[UIPanGestureRecognizer alloc] init];
     tableTopConstraint = [[NSLayoutConstraint alloc] init];
     _searchBar = [[UISearchBar alloc] init];
     dimmingView = [[UIView alloc] init];
     contentView = [[UIVisualEffectView alloc] initWithEffect: [UIBlurEffect effectWithStyle: UIBlurEffectStyleLight]];
-    itemList = [[MKMapItemListViewController alloc] initWithStyle: UITableViewStyleGrouped];
+    itemList = [[MKMapItemListViewController alloc] initWithStyle: UITableViewStylePlain];
     mapItems = [NSMutableArray array];
 }
 
@@ -65,6 +67,7 @@
 
     // Search
     localSearchCompleter.delegate = self;
+    localSearchCompleter.filterType = MKSearchCompletionFilterTypeLocationsOnly;
 
     // Location
     [locationManager requestWhenInUseAuthorization];
@@ -90,6 +93,9 @@
     knob.layer.cornerRadius = 2;
     [contentView addSubview: knob];
 
+    userTrackingButton.customView.backgroundColor = [UIColor whiteColor];
+    userTrackingButton.customView.translatesAutoresizingMaskIntoConstraints = NO;
+
     [_searchBar setBackgroundImage: [[UIImage alloc] init] forBarPosition: UIBarPositionAny barMetrics: UIBarMetricsDefault];
     _searchBar.placeholder = NSLocalizedString(@"Search for a place or address", comment: @"Search for a place or address");
     _searchBar.delegate = self;
@@ -100,6 +106,12 @@
     [self.view addConstraint: [NSLayoutConstraint constraintWithItem:_mapView attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTop multiplier:1 constant:0]];
     [self.view addConstraint: [NSLayoutConstraint constraintWithItem:_mapView attribute:NSLayoutAttributeRight relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeRight multiplier:1 constant:0]];
     [self.view addConstraint: [NSLayoutConstraint constraintWithItem:_mapView attribute:NSLayoutAttributeBottom relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeBottom multiplier:1 constant:0]];
+    
+    [self.view addSubview: userTrackingButton.customView];
+    [self.view addConstraint: [NSLayoutConstraint constraintWithItem:userTrackingButton.customView attribute:NSLayoutAttributeLeft relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeLeft multiplier:1 constant:10]];
+    [self.view addConstraint: [NSLayoutConstraint constraintWithItem:userTrackingButton.customView attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTop multiplier:1 constant:UIApplication.sharedApplication.statusBarFrame.size.height+10]];
+    [userTrackingButton.customView addConstraint:[NSLayoutConstraint constraintWithItem:userTrackingButton.customView attribute:NSLayoutAttributeWidth relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:30]];
+    [userTrackingButton.customView addConstraint:[NSLayoutConstraint constraintWithItem:userTrackingButton.customView attribute:NSLayoutAttributeHeight relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:30]];
     
     [self.view insertSubview:dimmingView belowSubview:_mapView];
     dimmingView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -115,7 +127,6 @@
     [self.view addConstraint: tableTopConstraint];
     [self.view addConstraint: [NSLayoutConstraint constraintWithItem:contentView attribute:NSLayoutAttributeRight relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeRight multiplier:1 constant:0]];
     [self.view addConstraint: [NSLayoutConstraint constraintWithItem:contentView attribute:NSLayoutAttributeBottom relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeBottom multiplier:1 constant:contentView.layer.cornerRadius]];
-    //tableView.translatesAutoresizingMaskIntoConstraints = false
     
     knob.translatesAutoresizingMaskIntoConstraints = NO;
     [knob addConstraint:[NSLayoutConstraint constraintWithItem:knob attribute:NSLayoutAttributeWidth relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:30]];
@@ -232,7 +243,7 @@
 }
 
 - (BOOL)searchBar:(UISearchBar *)searchBar shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text {
-    localSearchCompleter.queryFragment = searchBar.text;
+    localSearchCompleter.queryFragment = [searchBar.text stringByTrimmingCharactersInSet: NSCharacterSet.whitespaceCharacterSet];
     itemList.headerMessage = [NSLocalizedString(@"Loading", comment: @"Loading") stringByAppendingString: @"..."];
     return YES;
 }
